@@ -1,0 +1,23 @@
+[project]
+name = "portfolio-asset-allocation-backtester"
+version = "0.1.0"
+description = "This online app allows you to compute and backtest the optimal asset allocation of a portfolio. The allocation is computed by maximizing the Sharpe ratio."
+authors = [
+    {name = "Lars del Bubba",email = "larsdb98@gmail.com"}
+]
+license = {text = "MIT License"}
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "numpy (>=2.3.3,<3.0.0)",
+    "panel (>=1.8.0,<2.0.0)",
+    "scipy (>=1.16.2,<2.0.0)",
+    "matplotlib (>=3.10.6,<4.0.0)",
+    "plotly (>=6.3.0,<7.0.0)",
+    "pandas (>=2.3.2,<3.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
