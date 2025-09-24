@@ -1,7 +1,8 @@
+from ..model import Model
+from .securities_table_widget import SecuritiesTableWidget
+
 import os
 from pathlib import Path
-from .model import Model
-
 import panel as pn
 import plotly.graph_objects as go
 import pandas as pd
@@ -17,6 +18,8 @@ class View:
         self.model = model
         self.css_style_path = css_style_path
         self.dashboard_title = dashboard_title
+
+        self.securities_table_widget = SecuritiesTableWidget()
 
         self.title_widget = pn.pane.Markdown(
             "# Portfolio Asset Allocation", css_classes=["app-title"]
@@ -53,7 +56,13 @@ class View:
         self.performance_plot = pn.pane.Plotly(
             self._empty_plot(), sizing_mode="stretch_both"
         )
-        self.stats_table = pn.pane.DataFrame(pd.DataFrame, width=100, height=300)
+
+        dummy_df = pd.DataFrame(columns=["A", "B", "C"])
+        self.stats_table = pn.pane.DataFrame(
+            dummy_df,
+            width=100,
+            height=300,
+        )
 
         # Tabs
         self.tabs = pn.Tabs(
@@ -68,6 +77,7 @@ class View:
             self.start_date,
             self.end_date,
             self.initial_amount,
+            self.securities_table_widget.panel(),
             self.asset_allocation,
             self.run_button,
             width=300,

@@ -1,6 +1,6 @@
-from .model import Model
-from .view import View
-from .controller import Controller
+from .model.model import Model
+from .view.view import View
+from .controller.controller import Controller
 
 import os
 
