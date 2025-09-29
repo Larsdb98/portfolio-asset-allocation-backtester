@@ -1,5 +1,6 @@
 from ..model import Model
-from .securities_table_widget import SecuritiesTableWidget
+from .instrument_table_widget import InstrumentTableWidget
+from ..utils import GRANULARITY_DICT
 
 import os
 from pathlib import Path
@@ -19,7 +20,7 @@ class View:
         self.css_style_path = css_style_path
         self.dashboard_title = dashboard_title
 
-        self.securities_table_widget = SecuritiesTableWidget()
+        self.instrument_table_widget = InstrumentTableWidget()
 
         self.title_widget = pn.pane.Markdown(
             "# Portfolio Asset Allocation", css_classes=["app-title"]
@@ -41,15 +42,15 @@ class View:
         # Sidebar widgets
         self.start_date = pn.widgets.DatePicker(name="Start Date")
         self.end_date = pn.widgets.DatePicker(name="End Date")
+
+        self.granularity_input = pn.widgets.Select(
+            name="Granularity", options=GRANULARITY_DICT
+        )
+
         self.initial_amount = pn.widgets.IntInput(
             name="Initial Investment ($)", value=100_000
         )
 
-        self.asset_allocation = pn.widgets.TextAreaInput(
-            name="Asset Allocation (JSON)",
-            value='{"Stocks": 0.6, "Bonds": 0.4}',
-            height=100,
-        )
         self.run_button = pn.widgets.Button(name="Run Backtest", button_type="primary")
 
         # PlaceHolder for outputs
@@ -76,9 +77,9 @@ class View:
             "### Parameters",
             self.start_date,
             self.end_date,
+            self.granularity_input,
             self.initial_amount,
-            self.securities_table_widget.panel(),
-            self.asset_allocation,
+            self.instrument_table_widget.panel(),
             self.run_button,
             width=300,
         )

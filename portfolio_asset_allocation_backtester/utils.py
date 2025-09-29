@@ -1,0 +1,31 @@
+GRANULARITY_LIST = [
+    "1 Minute",
+    "2 Minutes",
+    "5 Minutes",
+    "15 Minutes",
+    "30 Minutes",
+    "60 Minutes",
+    "90 Minutes",
+    "1 Hour",
+    "1 Day",
+    "5 Days",
+    "1 Week",
+    "1 Month",
+    "3 Months",
+]
+
+GRANULARITY_DICT = {
+    "1 Day": "1d",
+    "1 Minute": "1m",
+    "2 Minutes": "2m",
+    "5 Minutes": "5m",
+    "15 Minutes": "15m",
+    "30 Minutes": "30m",
+    "60 Minutes": "60m",
+    "90 Minutes": "90m",
+    "1 Hour": "1h",
+    "5 Days": "5d",
+    "1 Week": "1wk",
+    "1 Month": "1mo",
+    "3 Months": "3mo",
+}
