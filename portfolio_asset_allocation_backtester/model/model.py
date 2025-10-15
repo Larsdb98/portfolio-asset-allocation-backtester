@@ -1,11 +1,13 @@
 from .markowitz_efficient_frontier import (
     MarkowitzEfficientFrontier,
 )
-from .monte_carlo import MonteCarloSim
+from .yfinance_fetcher import YFinanceFetcher
 
-import yfinance as yf
 import datetime
 import pandas as pd
+import numpy as np
+from typing import Dict
+import datetime
 
 
 class Model:
@@ -13,6 +15,10 @@ class Model:
         self.instrument_list = None
         self.instrument_df = pd.DataFrame(columns=["Ticker"])
         self.prices_df = pd.DataFrame()
+        self.closing_prices_df = pd.DataFrame()
+
+        self.markow_frontier = None
+        self.markowitz_plot_data = None
 
     def add_instrument(self, ticker) -> None:
         if ticker and ticker not in self.instrument_df["Ticker"].values:
@@ -28,61 +34,54 @@ class Model:
                 drop=True
             )
 
-    # ---------------------------
-    # Data fetching
-    # ---------------------------
-    def fetch_data(
-        self,
-        start_date: datetime.date,
-        end_date: datetime.date,
-        granularity: str = "1d",
+    def run_backtest(
+        self, start_date: datetime.date, end_date: datetime.date, interval: str = "1d"
     ):
-        """
-        Fetch closing prices for all tickers in instrument_df.
-        granularity options: "1m", "2m", "5m", "15m", "30m", "60m",
-                             "90m", "1h", "1d", "5d", "1wk", "1mo", "3mo"
-        """
-        if self.instrument_df.empty:
-            return pd.DataFrame()
+        ticker_list = self.instrument_df["Ticker"].to_list()
+        start_date_str = start_date.strftime("%Y-%m-%d")
+        end_date_str = end_date.strftime("%Y-%m-%d")
 
-        tickers = self.instrument_df["Ticker"].tolist()
-        data = yf.download(
-            tickers,
-            start=start_date,
-            end=end_date,
-            interval=granularity,
-            progress=False,
-            group_by="ticker",
-            auto_adjust=True,
+        if len(ticker_list) < 2:
+            raise ValueError(
+                f"Warning: Not enough tickers have been provided ! Only {len(ticker_list)} have been given."
+            )
+
+        print("Model :: run_backtest: List of tickers given:")
+        print(ticker_list)
+
+        # Fetch yFinance prices
+        try:
+            yf_fetcher = YFinanceFetcher(
+                start=start_date_str,
+                end=end_date_str,
+                tickers=ticker_list,
+                interval=interval,
+            )
+            self.prices_df = yf_fetcher.get_raw_ohlc_data()
+            self.closing_prices_df = yf_fetcher.get_price_data(price_type="Close")
+        except Exception as e:
+            raise Exception(
+                f"Model :: run_backtest :: YFinanceFetcher: ran into the following error: {e}"
+            )
+
+        markow_frontier = MarkowitzEfficientFrontier(
+            instrument_prices_df=self.closing_prices_df
         )
-
-        # yfinance returns multi-index if multiple tickers
-        if len(tickers) == 1:
-            prices = data["Close"].to_frame(name=tickers[0])
-        else:
-            prices = data["Close"]
-
-        self.prices_df = prices
-        return self.prices_df
-
-    def _fetch_single_ticker(self, ticker: str, start_date, end_date, granularity="1d"):
-        """Fetch a single ticker's closing prices and merge into prices_df."""
-        data = yf.download(
-            ticker,
-            start=start_date,
-            end=end_date,
-            interval=granularity,
-            progress=False,
-            auto_adjust=True,
+        markow_frontier.stochastic_optimisation_portfolio_allocation(
+            portfolio_count=10000  # Maybe this will become an advanced feature input in the future ?
         )
+        try:
+            self.markowitz_plot_data = markow_frontier.get_plot_data
+        except Exception as e:
+            raise Exception(
+                f"Model :: run_backtest: The following exception was caught: {e}"
+            )
 
-        if "Close" not in data.columns:
-            return
-
-        series = data["Close"].rename(ticker)
-
-        if self.prices_df.empty:
-            self.prices_df = series.to_frame()
+    @property
+    def get_markowitz_plot_data(self) -> Dict[str, np.typing.NDArray]:
+        if self.markowitz_plot_data is not None:
+            return self.markowitz_plot_data
         else:
-            # Outer join to align dates
-            self.prices_df = self.prices_df.join(series, how="outer")
+            raise Exception(
+                "Model :: get_markowitz_plot_data: Markowitz data has not been generated."
+            )

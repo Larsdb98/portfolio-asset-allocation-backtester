@@ -7,7 +7,11 @@ from typing import List, Dict
 
 class YFinanceFetcher:
     def __init__(
-        self, start: datetime, end: datetime, tickers: List | str, interval: str = "1d"
+        self,
+        start: datetime.date,
+        end: datetime.date,
+        tickers: List | str,
+        interval: str = "1d",
     ):
         """
         Fetch OHLC market data from Yahoo Finance

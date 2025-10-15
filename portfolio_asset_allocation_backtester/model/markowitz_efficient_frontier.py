@@ -3,7 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.optimize import minimize
 
-from typing import Tuple
+from typing import Tuple, Dict
 
 
 class MarkowitzEfficientFrontier:
@@ -35,6 +35,8 @@ class MarkowitzEfficientFrontier:
 
         self.markowitz_optimal_volatility = None
         self.__linspaced_returns_for_efficient_frontier = None
+
+        self.__markowitz_has_been_run = False
 
     def stochastic_optimisation_portfolio_allocation(
         self, portfolio_count: int = 10000
@@ -72,6 +74,24 @@ class MarkowitzEfficientFrontier:
         self.__all_expected_volatility = expected_volatility
         self.__all_expected_log_returns = expected_log_returns
         self.__max_sharpe_index = max_sharpe_id
+
+        self.__markowitz_has_been_run = True
+
+    @property
+    def get_plot_data(self) -> Dict[str, np.typing.NDArray]:
+        if self.__markowitz_has_been_run:
+            ret = {
+                "all_expected_volatility": self.__all_expected_volatility,
+                "all_expected_log_returns": self.__all_expected_log_returns,
+                "all_sharpe": self.__all_sharpe,
+                "max_sharpe_index": self.__max_sharpe_index,
+                "optimization_method": self.optimisation_method,
+            }
+            return ret
+        else:
+            raise ValueError(
+                "Markowitz Efficient Frontier / Stochastic has not been run yet !"
+            )
 
     def optimise_portfolio_allocation(self):
         """
@@ -143,88 +163,6 @@ class MarkowitzEfficientFrontier:
 
         self.markowitz_optimal_volatility = volatility_opt
         self.__linspaced_returns_for_efficient_frontier = log_returns
-
-    def plot_stochastic_optimised_frontier(
-        self,
-        figsize: Tuple[int, int] = (16, 10),
-        title: str = "Expected Volatility Against Expected Log Returns",
-    ) -> None:
-        """
-        Computes and plots the Markowitz Efficient Frontier
-
-        Parameters
-        ----------
-        figsize: matplotlib figure size. Defaults with (16, 10)
-        title: graph title
-        """
-        if (
-            self.__all_expected_volatility is not None
-            and self.__optimisation_method == "stochastic"
-        ):
-            plt.figure(figsize=figsize)
-            plt.scatter(
-                self.__all_expected_volatility,
-                self.__all_expected_log_returns,
-                c=self.__all_sharpe,
-            )
-            plt.scatter(
-                self.__all_expected_volatility[self.__max_sharpe_index],
-                self.__all_expected_log_returns[self.__max_sharpe_index],
-                c="red",
-            )
-            plt.xlabel("Expected Volatility")
-            plt.ylabel("Expected Log Returns")
-            plt.title(title)
-            plt.colorbar(label="SR")
-            plt.show()
-        else:
-            raise ValueError(
-                "Stochastically optimal frontier has not been computed yet !"
-            )
-
-    def plot_optimal_markowitz_frontier(
-        self,
-        figsize: Tuple[int, int] = (16, 10),
-        max_log_returns: float = 0.05,
-        title: str = "Expected Volatility Against Expected Log Returns",
-    ) -> None:
-        """
-        Plot the Markowitz Efficient Frontier with the stochastically computed portfolio returns.
-
-        Parameters
-        ----------
-        figsize: matplotlib figure size. Defaults with (16, 10)
-        max_log_returns: for display purposes. Defaults at 0.05 but should be adjusted based on the preliminary graphs generated.
-        title: graph title
-        """
-        # Recompute efficient frontier
-        self.compute_optimized_markowitz_frontier(max_log_returns=max_log_returns)
-
-        if self.__all_weights is None:
-            self.stochastic_optimisation_portfolio_allocation()
-
-        plt.figure(figsize=figsize)
-        plt.scatter(
-            self.__all_expected_volatility,
-            self.__all_expected_log_returns,
-            c=self.__all_sharpe,
-        )
-        plt.scatter(
-            self.__all_expected_volatility[self.__max_sharpe_index],
-            self.__all_expected_log_returns[self.__max_sharpe_index],
-            c="red",
-        )
-
-        plt.plot(
-            self.markowitz_optimal_volatility,
-            self.__linspaced_returns_for_efficient_frontier,
-            "r",
-        )
-        plt.xlabel("Expected Volatility")
-        plt.ylabel("Expected Log Returns")
-        plt.title(title)
-        plt.colorbar(label="Sharpe Ratio")
-        plt.show()
 
     @property
     def optimisation_method(self):
