@@ -6,6 +6,8 @@ from ..view.view import View
 import threading
 from param.parameterized import Event
 import panel as pn
+import pandas as pd
+import numpy as np
 
 
 class Controller:
@@ -29,6 +31,14 @@ class Controller:
         # Main components
         self.view.run_button.on_click(self.run_backtest)
 
+        self.view.weight_type_toggle.param.watch(self.on_weight_toggle, "value")
+
+    def add_default_instrument(self, ticker: str) -> None:
+        self.model.add_instrument(ticker=ticker)
+        self.view.instrument_table_widget.refresh_table(
+            instrument_df=self.model.instrument_df
+        )
+
     def add_instrument(self, event: Event) -> None:
         ticker = self.view.instrument_table_widget.ticker_input.value.strip().upper()
         self.model.add_instrument(ticker=ticker)
@@ -42,6 +52,23 @@ class Controller:
         self.view.instrument_table_widget.refresh_table(
             instrument_df=self.model.instrument_df
         )
+
+    def on_weight_toggle(self, event: Event):
+        """Callback when user toggles between stochastic and optimal weights."""
+        df = self.view.allocation_table.value
+        if df.empty:
+            return
+
+        tickers = df["Symbol"].tolist()
+
+        if self.view.weight_type_toggle.value == "Stochastic":
+            weights = df["Stochastic Weight Allocation (%)"].to_numpy() / 100
+            title = "Stochastic Portfolio Weights"
+        else:
+            weights = df["Optimal Weight Allocation (%)"].to_numpy() / 100
+            title = "Optimal Portfolio Weights"
+
+        self.view.update_weight_pie_chart(tickers, weights, title)
 
     def run_backtest(self, event: Event):
         """Callback triggered when the Run Backtest button is clicked."""
@@ -72,7 +99,7 @@ class Controller:
                 )
 
                 print("DEBUG: Backtest done — updating UI")
-
+                self.update_ui_after_backtest()
                 # Schedule UI update back on main thread
                 if pn.state.curdoc:
                     pn.state.curdoc.add_next_tick_callback(
@@ -83,6 +110,7 @@ class Controller:
                 else:
                     # Fallback: directly update the UI
                     self.view.performance_plot.object = plotly_fig
+
             except Exception as e:
                 if pn.state.curdoc:
                     pn.state.curdoc.add_next_tick_callback(
@@ -100,3 +128,54 @@ class Controller:
         # Launch thread
         thread = threading.Thread(target=worker, daemon=True)
         thread.start()
+
+    def update_ui_after_backtest(self) -> None:
+        """Update the allocations table and pie chart after a backtest."""
+        try:
+            tickers = self.model.instrument_df["Ticker"].to_list()
+            names = self.model.get_ticker_long_names
+            stochastic_weights = self.model.get_stochastic_optimal_weights
+            optimal_weights = self.model.get_optimal_weights
+
+            df = pd.DataFrame(
+                {
+                    "Symbol": tickers,
+                    "Name": names,
+                    "Stochastic Weight Allocation (%)": np.array(stochastic_weights)
+                    * 100,
+                    "Optimal Weight Allocation (%)": np.array(optimal_weights) * 100,
+                }
+            )
+
+            # Format percentage columns
+            df["Stochastic Weight Allocation (%)"] = df[
+                "Stochastic Weight Allocation (%)"
+            ].map(lambda x: f"{x:.2f}%")
+            df["Optimal Weight Allocation (%)"] = df[
+                "Optimal Weight Allocation (%)"
+            ].map(lambda x: f"{x:.2f}%")
+
+            # Update the view's table
+            self.view.allocation_table.value = df
+
+            # Update pie chart
+            selected_mode = (
+                self.view.weight_type_toggle.value
+            )  # "Stochastic" or "Optimal"
+            if selected_mode == "Stochastic":
+                weights = stochastic_weights
+                title = "Stochastic Portfolio Weights"
+            else:
+                weights = optimal_weights
+                title = "Optimal Portfolio Weights"
+
+            self.view.update_weight_pie_chart(tickers, weights, title)
+
+        except Exception as e:
+            import traceback
+
+            traceback.print_exc()
+            print(f"Controller :: Error while updating UI: {e}")
+
+        # Update the view's table
+        self.view.allocation_table.value = df

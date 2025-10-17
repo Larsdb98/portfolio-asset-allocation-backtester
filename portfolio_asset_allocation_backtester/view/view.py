@@ -65,6 +65,47 @@ class View:
             self._empty_plot(), sizing_mode="stretch_both"
         )
 
+        # Allocation Table
+        alloc_columns = [
+            "Symbol",
+            "Name",
+            "Stochastic Weight Allocation (%)",
+            "Optimal Weight Allocation (%)",
+        ]
+        self.allocation_table = pn.widgets.Tabulator(
+            pd.DataFrame(columns=alloc_columns),
+            height=200,
+            widths={"Symbol": 100, "Name": 120},
+            disabled=True,
+            pagination=None,
+            theme="materialize",
+        )
+
+        # Pie chart and toggle
+        self.weight_type_toggle = pn.widgets.RadioButtonGroup(
+            name="Weight Type",
+            options=["Optimal", "Stochastic"],
+            button_type="primary",
+            value="Optimal",
+        )
+        self.weight_pie_chart = pn.pane.Plotly(self._empty_pie(), height=400)
+
+        # Highlights section (returns + risk)
+        self.portfolio_returns_panel = pn.pane.Markdown(
+            "**Portfolio Return:** –", css_classes=["app-sub"]
+        )
+
+        self.risk_panel = pn.pane.Markdown("**Risk:** –", css_classes=["app-sub"])
+        self.highlights_section = pn.Row(
+            pn.Column("### Portfolio Returns", self.portfolio_returns_panel),
+            pn.Column("### Risk", self.risk_panel),
+        )
+
+        # Narrative summary text
+        self.summary_text = pn.pane.Markdown(
+            "### Portfolio Analysis\n\n_Run the backtest to view detailed insights about performance, risk, and growth._"
+        )
+
         dummy_df = pd.DataFrame(columns=["A", "B", "C"])
         self.stats_table = pn.pane.DataFrame(
             dummy_df,
@@ -72,14 +113,9 @@ class View:
             height=300,
         )
 
-        # Tabs
-        self.tabs = pn.Tabs(
-            ("Overview", self.performance_plot),
-            ("Statistics", self.stats_table),
-            ("Allocations", pn.pane.Markdown("Allocations view placeholder")),
-        )
-
-        # Layout
+        # ------------------------------------------------------------------
+        # LAYOUT SECTIONS
+        # ------------------------------------------------------------------
         self.sidebar = pn.Column(
             "### Parameters",
             self.start_date,
@@ -89,6 +125,37 @@ class View:
             self.instrument_table_widget.panel(),
             self.run_button,
             width=300,
+        )
+
+        self.overview_tab = pn.Column(
+            "## Portfolio Allocations",
+            self.allocation_table,
+            pn.layout.Spacer(height=15),
+            pn.Row(
+                pn.Column(
+                    self.weight_type_toggle,
+                    styles={
+                        "display": "flex",
+                        "align-items": "center",  # vertical centering
+                        "justify-content": "center",  # horizontal centering
+                        "height": "100%",
+                    },
+                    # width=200,
+                ),
+                self.weight_pie_chart,
+            ),
+            pn.layout.Spacer(height=15),
+            self.highlights_section,
+            pn.layout.Spacer(height=15),
+            self.summary_text,
+            pn.layout.Spacer(height=10),
+            self.performance_plot,
+        )
+
+        # Tabs
+        self.tabs = pn.Tabs(
+            ("Overview", self.overview_tab),
+            ("Statistics", pn.pane.Markdown("Statistics view placeholder")),
         )
 
         self.main_widget = pn.Column(
@@ -102,6 +169,10 @@ class View:
             accent_base_color="#006699",
             header_background="#00334d",
         )
+
+    # ------------------------------------------------------------------
+    # FIGURE HELPERS
+    # ------------------------------------------------------------------
 
     def _empty_plot(self):
         """Return an empty placeholder plotly figure for initial state."""
@@ -124,6 +195,72 @@ class View:
             height=600,
         )
         return fig
+
+    def _empty_pie(self):
+        fig = go.Figure()
+        fig.add_annotation(text="No weights yet", x=0.5, y=0.5, showarrow=False)
+        fig.update_layout(template="plotly_white", width=400, height=400)
+        return fig
+
+    def loading_figure(self, text="Running backtest, please wait..."):
+        fig = go.Figure()
+        fig.add_annotation(
+            text=text, x=0.5, y=0.5, xref="paper", yref="paper", showarrow=False
+        )
+        fig.update_xaxes(visible=False)
+        fig.update_yaxes(visible=False)
+        fig.update_layout(
+            height=400, margin=dict(l=0, r=0, t=40, b=0), template="plotly_white"
+        )
+        return fig
+
+    # ------------------------------------------------------------------
+    # UPDATE METHODS (to be called from controller)
+    # ------------------------------------------------------------------
+    def update_allocation_table(self, data: pd.DataFrame):
+        """Populate the allocation table."""
+        self.allocation_table.value = data
+
+    def update_pie_chart(
+        self, weights: pd.Series, labels: list, title: str = "Portfolio Distribution"
+    ):
+        """Update pie chart with weight distribution."""
+        fig = go.Figure(
+            data=[go.Pie(labels=labels, values=weights, textinfo="label+percent")]
+        )
+        fig.update_layout(
+            title=dict(text=title, x=0.5), template="plotly_white", height=400
+        )
+        self.weight_pie_chart.object = fig
+
+    def update_highlights(self, returns_text: str, risk_text: str, summary_text: str):
+        """Update textual highlights and narrative summary."""
+        self.portfolio_returns_panel.object = returns_text
+        self.risk_panel.object = risk_text
+        self.summary_text.object = summary_text
+
+    def update_weight_pie_chart(self, tickers: list, weights: list, title: str):
+        """Update the weight distribution pie chart."""
+        fig = go.Figure(
+            data=[
+                go.Pie(
+                    labels=tickers,
+                    values=weights,
+                    textinfo="label+percent",
+                    insidetextorientation="radial",
+                    hole=0.4,
+                )
+            ]
+        )
+
+        fig.update_layout(
+            title=dict(text=title, x=0.5, font=dict(size=16)),
+            height=400,
+            margin=dict(l=20, r=20, t=40, b=20),
+            template="plotly_white",
+        )
+
+        self.weight_pie_chart.object = fig
 
     def stochastic_optimised_frontier_plotly(
         self,
@@ -180,6 +317,10 @@ class View:
             hovertemplate="Max Sharpe Portfolio<br>Volatility: %{x:.2%}<br>Return: %{y:.2%}<extra></extra>",
         )
 
+        base_height = int(figsize[1] * 60)
+        min_height = 900  # minimum in pixels
+        height = max(base_height, min_height)
+
         # Build figure
         fig = go.Figure(data=[scatter, max_sharpe])
         fig.update_layout(
@@ -187,23 +328,11 @@ class View:
             xaxis_title="Expected Volatility",
             yaxis_title="Expected Log Returns",
             width=int(figsize[0] * 60),
-            height=int(figsize[1] * 60),
+            height=height,
             template="plotly_white",
             legend=dict(x=0.02, y=0.98, bgcolor="rgba(255,255,255,0.6)"),
         )
 
-        return fig
-
-    def loading_figure(self, text="Running backtest, please wait..."):
-        fig = go.Figure()
-        fig.add_annotation(
-            text=text, x=0.5, y=0.5, xref="paper", yref="paper", showarrow=False
-        )
-        fig.update_xaxes(visible=False)
-        fig.update_yaxes(visible=False)
-        fig.update_layout(
-            height=400, margin=dict(l=0, r=0, t=40, b=0), template="plotly_white"
-        )
         return fig
 
     def run(self, port=5006):

@@ -110,7 +110,7 @@ class MarkowitzEfficientFrontier:
             bounds=bounds,
             constraints=constraints,
         )
-        return w_optimal
+        return w_optimal.x  # optimal weight values
 
     def __check_normalized_weights(self, w):
         return np.sum(w) - 1

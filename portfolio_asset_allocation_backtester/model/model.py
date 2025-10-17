@@ -1,12 +1,12 @@
 from .markowitz_efficient_frontier import (
     MarkowitzEfficientFrontier,
 )
-from .yfinance_fetcher import YFinanceFetcher
+from .yfinance_fetcher import YFinanceFetcher, yfinance_ticker_info
 
 import datetime
 import pandas as pd
 import numpy as np
-from typing import Dict
+from typing import Dict, List, Any
 import datetime
 
 
@@ -19,6 +19,11 @@ class Model:
 
         self.markow_frontier = None
         self.markowitz_plot_data = None
+
+        self.__optimal_weights = None
+        self.__stoch_optimal_weights = None
+
+        self.__yfinance_ticker_info = None
 
     def add_instrument(self, ticker) -> None:
         if ticker and ticker not in self.instrument_df["Ticker"].values:
@@ -57,6 +62,7 @@ class Model:
                 tickers=ticker_list,
                 interval=interval,
             )
+            self.__yfinance_ticker_info = yfinance_ticker_info(ticker_list)
             self.prices_df = yf_fetcher.get_raw_ohlc_data()
             self.closing_prices_df = yf_fetcher.get_price_data(price_type="Close")
         except Exception as e:
@@ -67,9 +73,11 @@ class Model:
         markow_frontier = MarkowitzEfficientFrontier(
             instrument_prices_df=self.closing_prices_df
         )
+        self.__optimal_weights = markow_frontier.optimise_portfolio_allocation()
         markow_frontier.stochastic_optimisation_portfolio_allocation(
             portfolio_count=10000  # Maybe this will become an advanced feature input in the future ?
         )
+        self.__stoch_optimal_weights = markow_frontier.optimal_weights
         try:
             self.markowitz_plot_data = markow_frontier.get_plot_data
         except Exception as e:
@@ -84,4 +92,33 @@ class Model:
         else:
             raise Exception(
                 "Model :: get_markowitz_plot_data: Markowitz data has not been generated."
+            )
+
+    @property
+    def get_stochastic_optimal_weights(self) -> List[int]:
+        if self.__stoch_optimal_weights is not None:
+            return self.__stoch_optimal_weights
+        else:
+            raise ValueError(
+                "Model :: Stochastically optimal weights have not been computed yet !"
+            )
+
+    @property
+    def get_optimal_weights(self) -> List[int]:
+        if self.__optimal_weights is not None:
+            return self.__optimal_weights
+        else:
+            raise ValueError("Model :: Optimal weights have not been computed yet !")
+
+    @property
+    def get_ticker_long_names(self) -> List[str]:
+        if self.__yfinance_ticker_info is not None:
+            ret = [
+                self.__yfinance_ticker_info[ticker]["longName"]
+                for ticker in self.instrument_df["Ticker"].to_list()
+            ]
+            return ret
+        else:
+            raise ValueError(
+                "Model :: Ticker information has not yet been retrieved ! Run the backtest first..."
             )

@@ -16,6 +16,11 @@ def main():
 
     controller = Controller(model=model, view=view)
 
+    # default tickers upon startup
+    default_instruments = ["AAPL", "MSFT", "^DJI"]
+    for ticker in default_instruments:
+        controller.add_default_instrument(ticker)
+
     # Run the app
     view.run()
 

@@ -2,7 +2,7 @@ import yfinance
 import pandas as pd
 import datetime
 
-from typing import List, Dict
+from typing import List, Dict, Any
 
 
 class YFinanceFetcher:
@@ -142,3 +142,13 @@ def raw_yfinance_fetcher(
         interval=interval,
     )
     return raw_df
+
+
+def yfinance_ticker_info(
+    tickers: str | List[str],
+) -> Dict[str, Any] | Dict[str, Dict[str, Any]]:
+    if isinstance(tickers, str):
+        output = yfinance.Ticker(tickers)
+    else:
+        output = {symb: yfinance.Ticker(symb).info for symb in tickers}
+    return output
