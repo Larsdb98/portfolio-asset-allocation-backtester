@@ -105,6 +105,47 @@ body {
     color: white !important;
 }
 
+.highlight-section {
+    background-color: white;
+    border-radius: 12px;
+    padding: 20px 30px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+    margin-top: 15px;
+}
+
+.metric-box {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 1.6em;
+    color: black;
+    border-radius: 8px;
+    padding: 10px 0;
+    text-align: center;
+    width: 100%;
+    max-width: 200px;
+    margin: 0 auto;
+}
+
+.metric-box.green {
+    background-color: #5CFFBA;
+}
+
+.metric-box.red {
+    background-color: #FF9D9D;
+}
+
+.metric-box.gray {
+    background-color: #E5E8F0;
+}
+
+.bk.panel-widget .bk.layout-row {
+    justify-content: center !important;
+    align-items: center !important;
+}
+
+
 /* small responsive tweak, thank chatgpt lol */
 @media (max-width: 900px) {
 

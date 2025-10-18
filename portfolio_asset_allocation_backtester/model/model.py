@@ -25,6 +25,9 @@ class Model:
 
         self.__yfinance_ticker_info = None
 
+        self.allocation_df_raw = pd.DataFrame()
+        self.allocation_df_display = pd.DataFrame()
+
     def add_instrument(self, ticker) -> None:
         if ticker and ticker not in self.instrument_df["Ticker"].values:
             new_row = pd.DataFrame([[ticker]], columns=["Ticker"])

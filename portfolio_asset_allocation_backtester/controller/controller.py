@@ -55,7 +55,8 @@ class Controller:
 
     def on_weight_toggle(self, event: Event):
         """Callback when user toggles between stochastic and optimal weights."""
-        df = self.view.allocation_table.value
+        # df = self.view.allocation_table.value
+        df = self.model.allocation_df_raw
         if df.empty:
             return
 
@@ -137,7 +138,7 @@ class Controller:
             stochastic_weights = self.model.get_stochastic_optimal_weights
             optimal_weights = self.model.get_optimal_weights
 
-            df = pd.DataFrame(
+            raw_df = pd.DataFrame(
                 {
                     "Symbol": tickers,
                     "Name": names,
@@ -146,17 +147,22 @@ class Controller:
                     "Optimal Weight Allocation (%)": np.array(optimal_weights) * 100,
                 }
             )
+            self.model.allocation_df_raw = raw_df
+
+            display_df = raw_df.copy()
 
             # Format percentage columns
-            df["Stochastic Weight Allocation (%)"] = df[
+            display_df["Stochastic Weight Allocation (%)"] = raw_df[
                 "Stochastic Weight Allocation (%)"
             ].map(lambda x: f"{x:.2f}%")
-            df["Optimal Weight Allocation (%)"] = df[
+            display_df["Optimal Weight Allocation (%)"] = raw_df[
                 "Optimal Weight Allocation (%)"
             ].map(lambda x: f"{x:.2f}%")
 
+            self.model.allocation_df_display = display_df
+
             # Update the view's table
-            self.view.allocation_table.value = df
+            self.view.allocation_table.value = display_df
 
             # Update pie chart
             selected_mode = (
@@ -178,4 +184,20 @@ class Controller:
             print(f"Controller :: Error while updating UI: {e}")
 
         # Update the view's table
-        self.view.allocation_table.value = df
+        self.view.allocation_table.value = display_df
+
+    def update_highlights_section(self, stats):
+        """Update the metric boxes in the Highlights section."""
+        ret = stats["annualized_return"] * 100
+        vol = stats["annualized_volatility"] * 100
+        dd = stats["max_drawdown"] * 100
+
+        self.view.return_card[2][
+            0
+        ].object = f"<div class='metric-box green'>{ret:.1f}%</div>"
+        self.view.risk_card[2][
+            0
+        ].object = f"<div class='metric-box green'>{vol:.1f}%</div>"
+        self.view.risk_card[2][
+            1
+        ].object = f"<div class='metric-box gray'>{dd:.1f}%</div>"

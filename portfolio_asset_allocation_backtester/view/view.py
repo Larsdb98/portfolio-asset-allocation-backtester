@@ -91,19 +91,84 @@ class View:
         self.weight_pie_chart = pn.pane.Plotly(self._empty_pie(), height=400)
 
         # Highlights section (returns + risk)
-        self.portfolio_returns_panel = pn.pane.Markdown(
-            "**Portfolio Return:** –", css_classes=["app-sub"]
+        # self.portfolio_returns_panel = pn.pane.Markdown(
+        #     "**Portfolio Return:** –", css_classes=["app-sub"]
+        # )
+
+        # self.risk_panel = pn.pane.Markdown("**Risk:** –", css_classes=["app-sub"])
+        # self.highlights_section = pn.Row(
+        #     pn.Column("### Portfolio Returns", self.portfolio_returns_panel),
+        #     pn.Column("### Risk", self.risk_panel),
+        # )
+
+        # # Narrative summary text
+        # self.summary_text = pn.pane.Markdown(
+        #     "### Portfolio Analysis\n\n_Run the backtest to view detailed insights about performance, risk, and growth._"
+        # )
+
+        self.return_card = pn.Column(
+            pn.pane.Markdown("#### Annualized Return", margin=(0, 0, 5, 0)),
+            pn.Row(
+                pn.pane.Markdown("**Portfolio Return**", align="center"),
+            ),
+            pn.Row(
+                pn.pane.HTML(
+                    "<div class='metric-box green'>10.0%</div>", align="center"
+                ),
+            ),
+            sizing_mode="stretch_width",
+            align="center",
         )
 
-        self.risk_panel = pn.pane.Markdown("**Risk:** –", css_classes=["app-sub"])
-        self.highlights_section = pn.Row(
-            pn.Column("### Portfolio Returns", self.portfolio_returns_panel),
-            pn.Column("### Risk", self.risk_panel),
+        self.risk_card = pn.Column(
+            pn.pane.Markdown("#### Volatility and Drawdown", margin=(0, 0, 5, 0)),
+            pn.Row(
+                pn.pane.Markdown("**Standard Deviation**", align="center"),
+                pn.pane.Markdown("**Drawdown**", align="center"),
+                sizing_mode="stretch_width",
+            ),
+            pn.Row(
+                pn.pane.HTML(
+                    "<div class='metric-box green'>11.4%</div>", align="center"
+                ),
+                pn.pane.HTML(
+                    "<div class='metric-box gray'>23.6%</div>", align="center"
+                ),
+                sizing_mode="stretch_width",
+            ),
+            sizing_mode="stretch_width",
+            align="center",
         )
 
-        # Narrative summary text
-        self.summary_text = pn.pane.Markdown(
-            "### Portfolio Analysis\n\n_Run the backtest to view detailed insights about performance, risk, and growth._"
+        self.highlights_section = pn.Column(
+            pn.pane.Markdown("## Highlights", styles={"color": "blue"}, align="center"),
+            pn.Row(
+                pn.Column(
+                    pn.pane.Markdown("### Return", align="center"),
+                    self.return_card,
+                    sizing_mode="stretch_width",
+                    align="center",
+                ),
+                pn.Column(
+                    pn.pane.Markdown("### Risk", align="center"),
+                    self.risk_card,
+                    sizing_mode="stretch_width",
+                    align="center",
+                ),
+                sizing_mode="stretch_width",
+                align="center",
+                margin=(0, 0, 10, 0),
+            ),
+            pn.layout.Divider(),
+            pn.pane.Markdown(
+                "_Interpretation:_ Over the backtested period, the portfolio delivered consistent growth with moderate risk...",
+                align="center",
+                margin=(10, 0, 0, 0),
+            ),
+            sizing_mode="stretch_width",
+            align="center",
+            css_classes=["highlight-section"],
+            margin=(10, 15, 25, 15),
         )
 
         dummy_df = pd.DataFrame(columns=["A", "B", "C"])
@@ -147,8 +212,8 @@ class View:
             pn.layout.Spacer(height=15),
             self.highlights_section,
             pn.layout.Spacer(height=15),
-            self.summary_text,
-            pn.layout.Spacer(height=10),
+            # self.summary_text,
+            # pn.layout.Spacer(height=10),
             self.performance_plot,
         )
 
