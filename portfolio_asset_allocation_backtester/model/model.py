@@ -20,6 +20,10 @@ class Model:
         self.markow_frontier = None
         self.markowitz_plot_data = None
 
+        self.initial_portfolio_value = None
+        self.final_portfolio_value = None
+        self.portfolio_stats: Dict[str, Any] = None
+
         self.__optimal_weights = None
         self.__stoch_optimal_weights = None
 
@@ -27,6 +31,9 @@ class Model:
 
         self.allocation_df_raw = pd.DataFrame()
         self.allocation_df_display = pd.DataFrame()
+
+    def update_initial_portfolio_value(self, portfolio_value: float) -> None:
+        self.initial_portfolio_value = portfolio_value
 
     def add_instrument(self, ticker) -> None:
         if ticker and ticker not in self.instrument_df["Ticker"].values:
@@ -86,6 +93,60 @@ class Model:
         except Exception as e:
             raise Exception(
                 f"Model :: run_backtest: The following exception was caught: {e}"
+            )
+
+    def compute_portfolio_statistics(
+        self, start_date: datetime.date, end_date: datetime.date
+    ) -> None:
+        """Compute daily returns, annualized return, volatility, drawdown, and Sharpe ratio."""
+
+        if self.closing_prices_df is None or self.closing_prices_df.empty:
+            raise ValueError(
+                "Model :: compute_portfolio_statistics: No historical price data available."
+            )
+
+        weights = np.array(self.get_optimal_weights)
+
+        daily_returns = self.closing_prices_df.pct_change().dropna()
+
+        portfolio_returns = (daily_returns * weights).sum(axis=1)
+
+        portfolio_value = (1 + portfolio_returns).cumprod()
+
+        trading_days = 252
+        mean_daily_return = float(portfolio_returns.mean())
+        std_daily = float(portfolio_returns.std())
+
+        annualized_return = float((1 + mean_daily_return) ** trading_days - 1)
+        annualized_volatility = float(std_daily * np.sqrt(trading_days))
+
+        # --- Drawdown computation ---
+        rolling_max = portfolio_value.cummax()
+        drawdown = (portfolio_value / rolling_max) - 1
+        max_drawdown = float(drawdown.min())
+
+        # --- Sharpe ratio (risk-free = 0 assumed) ---
+        sharpe_ratio = float(mean_daily_return / std_daily * np.sqrt(trading_days))
+
+        # --- Store in model for controller access ---
+        self.portfolio_stats = {
+            "daily_returns": portfolio_returns,
+            "portfolio_value": portfolio_value,
+            "annualized_return": annualized_return,
+            "annualized_volatility": annualized_volatility,
+            "max_drawdown": max_drawdown,
+            "sharpe_ratio": sharpe_ratio,
+            "start_date": start_date.strftime("%Y-%m-%d"),
+            "end_date": end_date.strftime("%Y-%m-%d"),
+        }
+
+    @property
+    def get_initial_portfolio_value(self) -> int:
+        if self.initial_portfolio_value is not None:
+            return self.initial_portfolio_value
+        else:
+            raise ValueError(
+                "Model :: get_initial_portfolio_value: initial portfolio value has not been properly registered."
             )
 
     @property

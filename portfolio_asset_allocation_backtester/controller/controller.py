@@ -8,6 +8,7 @@ from param.parameterized import Event
 import panel as pn
 import pandas as pd
 import numpy as np
+from typing import Dict
 
 
 class Controller:
@@ -16,6 +17,11 @@ class Controller:
         self.view = view
 
         self._bind()
+
+        # update initial amount right away
+        self.model.update_initial_portfolio_value(
+            portfolio_value=self.view.initial_amount.value
+        )
 
     def _bind(self):
         # Instrument table widget:
@@ -30,7 +36,7 @@ class Controller:
 
         # Main components
         self.view.run_button.on_click(self.run_backtest)
-
+        self.view.initial_amount.param.watch(self.update_initial_amount, "value")
         self.view.weight_type_toggle.param.watch(self.on_weight_toggle, "value")
 
     def add_default_instrument(self, ticker: str) -> None:
@@ -38,6 +44,9 @@ class Controller:
         self.view.instrument_table_widget.refresh_table(
             instrument_df=self.model.instrument_df
         )
+
+    def update_initial_amount(self, event: Event) -> None:
+        self.model.update_initial_portfolio_value(self.view.initial_amount.value)
 
     def add_instrument(self, event: Event) -> None:
         ticker = self.view.instrument_table_widget.ticker_input.value.strip().upper()
@@ -55,7 +64,6 @@ class Controller:
 
     def on_weight_toggle(self, event: Event):
         """Callback when user toggles between stochastic and optimal weights."""
-        # df = self.view.allocation_table.value
         df = self.model.allocation_df_raw
         if df.empty:
             return
@@ -88,6 +96,9 @@ class Controller:
                 self.model.run_backtest(
                     start_date=start_date, end_date=end_date, interval=interval
                 )
+                self.model.compute_portfolio_statistics(
+                    start_date=start_date, end_date=end_date
+                )
 
                 figure_dict = self.model.markowitz_plot_data
 
@@ -99,7 +110,6 @@ class Controller:
                     optimisation_method=figure_dict["optimization_method"],
                 )
 
-                print("DEBUG: Backtest done — updating UI")
                 self.update_ui_after_backtest()
                 # Schedule UI update back on main thread
                 if pn.state.curdoc:
@@ -177,6 +187,11 @@ class Controller:
 
             self.view.update_weight_pie_chart(tickers, weights, title)
 
+            # Update highlights section
+            self.view.highlights_view.update_portfolio_highlights(
+                initial_investment=self.model.get_initial_portfolio_value
+            )
+
         except Exception as e:
             import traceback
 
@@ -185,19 +200,3 @@ class Controller:
 
         # Update the view's table
         self.view.allocation_table.value = display_df
-
-    def update_highlights_section(self, stats):
-        """Update the metric boxes in the Highlights section."""
-        ret = stats["annualized_return"] * 100
-        vol = stats["annualized_volatility"] * 100
-        dd = stats["max_drawdown"] * 100
-
-        self.view.return_card[2][
-            0
-        ].object = f"<div class='metric-box green'>{ret:.1f}%</div>"
-        self.view.risk_card[2][
-            0
-        ].object = f"<div class='metric-box green'>{vol:.1f}%</div>"
-        self.view.risk_card[2][
-            1
-        ].object = f"<div class='metric-box gray'>{dd:.1f}%</div>"

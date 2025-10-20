@@ -1,5 +1,6 @@
 from ..model import Model
 from .instrument_table_widget import InstrumentTableWidget
+from .highlights_view import HighlightsView
 from ..utils import GRANULARITY_DICT
 
 import numpy as np
@@ -8,7 +9,7 @@ import panel as pn
 import plotly.graph_objects as go
 import pandas as pd
 from datetime import datetime, timedelta
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Dict
 
 
 class View:
@@ -26,6 +27,7 @@ class View:
         default_start_date = default_end_date - timedelta(days=365 * 3)
 
         self.instrument_table_widget = InstrumentTableWidget()
+        self.highlights_view = HighlightsView(model=self.model)
 
         self.title_widget = pn.pane.Markdown(
             "# Portfolio Asset Allocation", css_classes=["app-title"]
@@ -90,87 +92,6 @@ class View:
         )
         self.weight_pie_chart = pn.pane.Plotly(self._empty_pie(), height=400)
 
-        # Highlights section (returns + risk)
-        # self.portfolio_returns_panel = pn.pane.Markdown(
-        #     "**Portfolio Return:** –", css_classes=["app-sub"]
-        # )
-
-        # self.risk_panel = pn.pane.Markdown("**Risk:** –", css_classes=["app-sub"])
-        # self.highlights_section = pn.Row(
-        #     pn.Column("### Portfolio Returns", self.portfolio_returns_panel),
-        #     pn.Column("### Risk", self.risk_panel),
-        # )
-
-        # # Narrative summary text
-        # self.summary_text = pn.pane.Markdown(
-        #     "### Portfolio Analysis\n\n_Run the backtest to view detailed insights about performance, risk, and growth._"
-        # )
-
-        self.return_card = pn.Column(
-            pn.pane.Markdown("#### Annualized Return", margin=(0, 0, 5, 0)),
-            pn.Row(
-                pn.pane.Markdown("**Portfolio Return**", align="center"),
-            ),
-            pn.Row(
-                pn.pane.HTML(
-                    "<div class='metric-box green'>10.0%</div>", align="center"
-                ),
-            ),
-            sizing_mode="stretch_width",
-            align="center",
-        )
-
-        self.risk_card = pn.Column(
-            pn.pane.Markdown("#### Volatility and Drawdown", margin=(0, 0, 5, 0)),
-            pn.Row(
-                pn.pane.Markdown("**Standard Deviation**", align="center"),
-                pn.pane.Markdown("**Drawdown**", align="center"),
-                sizing_mode="stretch_width",
-            ),
-            pn.Row(
-                pn.pane.HTML(
-                    "<div class='metric-box green'>11.4%</div>", align="center"
-                ),
-                pn.pane.HTML(
-                    "<div class='metric-box gray'>23.6%</div>", align="center"
-                ),
-                sizing_mode="stretch_width",
-            ),
-            sizing_mode="stretch_width",
-            align="center",
-        )
-
-        self.highlights_section = pn.Column(
-            pn.pane.Markdown("## Highlights", styles={"color": "blue"}, align="center"),
-            pn.Row(
-                pn.Column(
-                    pn.pane.Markdown("### Return", align="center"),
-                    self.return_card,
-                    sizing_mode="stretch_width",
-                    align="center",
-                ),
-                pn.Column(
-                    pn.pane.Markdown("### Risk", align="center"),
-                    self.risk_card,
-                    sizing_mode="stretch_width",
-                    align="center",
-                ),
-                sizing_mode="stretch_width",
-                align="center",
-                margin=(0, 0, 10, 0),
-            ),
-            pn.layout.Divider(),
-            pn.pane.Markdown(
-                "_Interpretation:_ Over the backtested period, the portfolio delivered consistent growth with moderate risk...",
-                align="center",
-                margin=(10, 0, 0, 0),
-            ),
-            sizing_mode="stretch_width",
-            align="center",
-            css_classes=["highlight-section"],
-            margin=(10, 15, 25, 15),
-        )
-
         dummy_df = pd.DataFrame(columns=["A", "B", "C"])
         self.stats_table = pn.pane.DataFrame(
             dummy_df,
@@ -210,10 +131,8 @@ class View:
                 self.weight_pie_chart,
             ),
             pn.layout.Spacer(height=15),
-            self.highlights_section,
+            self.highlights_view.highlights_section,
             pn.layout.Spacer(height=15),
-            # self.summary_text,
-            # pn.layout.Spacer(height=10),
             self.performance_plot,
         )
 
@@ -298,20 +217,27 @@ class View:
         )
         self.weight_pie_chart.object = fig
 
-    def update_highlights(self, returns_text: str, risk_text: str, summary_text: str):
-        """Update textual highlights and narrative summary."""
-        self.portfolio_returns_panel.object = returns_text
-        self.risk_panel.object = risk_text
-        self.summary_text.object = summary_text
-
     def update_weight_pie_chart(self, tickers: list, weights: list, title: str):
         """Update the weight distribution pie chart."""
+        # Ensure numeric weights
+        weights = np.array(weights, dtype=float)
+
+        # Normalize just to be safe
+        total = weights.sum()
+        if total > 0:
+            weights = weights / total
+
+        percent_labels = [f"{w * 100:.2f}%" for w in weights]
+
         fig = go.Figure(
             data=[
                 go.Pie(
                     labels=tickers,
                     values=weights,
-                    textinfo="label+percent",
+                    text=[f"{t} — {p}" for t, p in zip(tickers, percent_labels)],
+                    hoverinfo="text",
+                    textinfo="percent+label",
+                    texttemplate="%{label}<br>%{value:.2%}",
                     insidetextorientation="radial",
                     hole=0.4,
                 )
