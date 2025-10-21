@@ -6,6 +6,7 @@ from .yfinance_fetcher import YFinanceFetcher, yfinance_ticker_info
 import datetime
 import pandas as pd
 import numpy as np
+from scipy.stats import skew, kurtosis, linregress
 from typing import Dict, List, Any
 import datetime
 
@@ -23,6 +24,8 @@ class Model:
         self.initial_portfolio_value = None
         self.final_portfolio_value = None
         self.portfolio_stats: Dict[str, Any] = None
+        self.portfolio_risk_metrics_dict: Dict[str, Any] = None
+        self.portfolio_risk_metrics_df: pd.DataFrame = None
 
         self.__optimal_weights = None
         self.__stoch_optimal_weights = None
@@ -58,7 +61,7 @@ class Model:
 
         if len(ticker_list) < 2:
             raise ValueError(
-                f"Warning: Not enough tickers have been provided ! Only {len(ticker_list)} have been given."
+                f"Model :: run_backtest: Warning: Not enough tickers have been provided ! Only {len(ticker_list)} have been given."
             )
 
         print("Model :: run_backtest: List of tickers given:")
@@ -140,6 +143,148 @@ class Model:
             "end_date": end_date.strftime("%Y-%m-%d"),
         }
 
+        # ==========================================================
+        # EXTENDED METRICS SECTION
+        # ==========================================================
+
+        # Convert to monthly returns
+        monthly_returns = portfolio_returns.resample("ME").apply(
+            lambda x: (1 + x).prod() - 1
+        )
+
+        # Benchmark (optional)
+        benchmark = getattr(self, "benchmark_returns", None)
+        if benchmark is not None:
+            benchmark = benchmark.loc[portfolio_returns.index]
+            benchmark_monthly = benchmark.resample("M").apply(
+                lambda x: (1 + x).prod() - 1
+            )
+        else:
+            benchmark_monthly = pd.Series(index=monthly_returns.index, dtype=float)
+
+        # --- Core stats ---
+        mean_monthly = monthly_returns.mean()
+        geo_mean_monthly = (np.prod(1 + monthly_returns)) ** (
+            1 / len(monthly_returns)
+        ) - 1
+        std_monthly = monthly_returns.std()
+
+        # Annualized conversions
+        mean_annual = (1 + mean_monthly) ** 12 - 1
+        geo_mean_annual = (1 + geo_mean_monthly) ** 12 - 1
+        std_annual = std_monthly * np.sqrt(12)
+
+        # Downside deviation (monthly)
+        downside_returns = monthly_returns[monthly_returns < 0]
+        downside_dev_monthly = np.sqrt(np.mean(downside_returns**2))
+
+        # Skewness / Kurtosis
+        skewness = skew(portfolio_returns)
+        excess_kurtosis = kurtosis(portfolio_returns)
+
+        # Value-at-Risk and CVaR
+        var_hist = np.percentile(portfolio_returns, 5)
+        var_analytic = mean_daily_return - 1.65 * std_daily
+        cvar = portfolio_returns[portfolio_returns <= var_hist].mean()
+
+        # Positive periods and gain/loss
+        positive_periods = (monthly_returns > 0).sum()
+        gain_loss_ratio = monthly_returns[monthly_returns > 0].mean() / abs(
+            monthly_returns[monthly_returns < 0].mean()
+        )
+
+        # Benchmark correlation and regression (for Beta, Alpha, R^2)
+        if benchmark is not None and benchmark.notna().any():
+            aligned = pd.concat([portfolio_returns, benchmark], axis=1).dropna()
+            r_port, r_bench = aligned.iloc[:, 0], aligned.iloc[:, 1]
+            slope, intercept, r_value, _, _ = linregress(r_bench, r_port)
+            beta = slope
+            alpha = intercept * trading_days
+            r2 = r_value**2
+            corr = np.corrcoef(r_port, r_bench)[0, 1]
+            active_return = mean_daily_return - r_bench.mean()
+            tracking_error = np.std(r_port - r_bench)
+            info_ratio = (
+                active_return / tracking_error if tracking_error > 0 else np.nan
+            )
+            upside_capture = (
+                100 * np.mean(r_port[r_bench > 0]) / np.mean(r_bench[r_bench > 0])
+            )
+            downside_capture = (
+                100 * np.mean(r_port[r_bench < 0]) / np.mean(r_bench[r_bench < 0])
+            )
+        else:
+            beta = alpha = r2 = corr = active_return = tracking_error = info_ratio = (
+                np.nan
+            )
+            upside_capture = downside_capture = np.nan
+
+        # Risk-adjusted measures
+        sortino_ratio = (
+            mean_monthly / downside_dev_monthly if downside_dev_monthly > 0 else np.nan
+        )
+        treynor_ratio = (
+            (mean_daily_return / beta) * 100 if beta and not np.isnan(beta) else np.nan
+        )
+        calmar_ratio = (
+            annualized_return / abs(max_drawdown) if max_drawdown != 0 else np.nan
+        )
+        m2_ratio = sharpe_ratio * std_annual + 0  # Modigliani-Modigliani (risk-free=0)
+        swr = annualized_return / (1 + annualized_volatility)
+        pwr = annualized_return / (1 + 2 * annualized_volatility)
+
+        # Store extended metrics
+        self.portfolio_risk_metrics_dict = {
+            "Arithmetic Mean (monthly)": mean_monthly,
+            "Arithmetic Mean (annualized)": mean_annual,
+            "Geometric Mean (monthly)": geo_mean_monthly,
+            "Geometric Mean (annualized)": geo_mean_annual,
+            "Standard Deviation (monthly)": std_monthly,
+            "Standard Deviation (annualized)": std_annual,
+            "Downside Deviation (monthly)": downside_dev_monthly,
+            "Maximum Drawdown": max_drawdown,
+            "Benchmark Correlation": corr,
+            "Beta": beta,
+            "Alpha (annualized)": alpha,
+            "R^2": r2,
+            "Sharpe Ratio": sharpe_ratio,
+            "Sortino Ratio": sortino_ratio,
+            "Treynor Ratio (%)": treynor_ratio,
+            "Calmar Ratio": calmar_ratio,
+            "Modigliani–Modigliani Measure": m2_ratio,
+            "Active Return": active_return,
+            "Tracking Error": tracking_error,
+            "Information Ratio": info_ratio,
+            "Skewness": skewness,
+            "Excess Kurtosis": excess_kurtosis,
+            "Historical VaR (5%)": var_hist,
+            "Analytical VaR (5%)": var_analytic,
+            "Conditional VaR (5%)": cvar,
+            "Upside Capture Ratio (%)": upside_capture,
+            "Downside Capture Ratio (%)": downside_capture,
+            "Safe Withdrawal Rate": swr,
+            "Perpetual Withdrawal Rate": pwr,
+            "Positive Periods": int(positive_periods),
+            "Gain/Loss Ratio": gain_loss_ratio,
+        }
+
+        self.portfolio_risk_metrics_df = pd.DataFrame.from_dict(
+            self.portfolio_risk_metrics_dict,
+            orient="index",
+            columns=["Sample Portfolio"],
+        )
+
+        # Optional: round numeric values nicely
+        self.portfolio_risk_metrics_df[
+            "Sample Portfolio"
+        ] = self.portfolio_risk_metrics_df["Sample Portfolio"].apply(
+            lambda x: (
+                f"{x:.2%}"
+                if isinstance(x, (int, float)) and abs(x) < 10
+                else f"{x:.2f}" if isinstance(x, (int, float)) else x
+            )
+        )
+
     @property
     def get_initial_portfolio_value(self) -> int:
         if self.initial_portfolio_value is not None:
@@ -164,7 +309,7 @@ class Model:
             return self.__stoch_optimal_weights
         else:
             raise ValueError(
-                "Model :: Stochastically optimal weights have not been computed yet !"
+                "Model :: get_stochastic_optimal_weights: Stochastically optimal weights have not been computed yet !"
             )
 
     @property
@@ -172,7 +317,9 @@ class Model:
         if self.__optimal_weights is not None:
             return self.__optimal_weights
         else:
-            raise ValueError("Model :: Optimal weights have not been computed yet !")
+            raise ValueError(
+                "Model :: get_optimal_weights: Optimal weights have not been computed yet !"
+            )
 
     @property
     def get_ticker_long_names(self) -> List[str]:
@@ -184,5 +331,14 @@ class Model:
             return ret
         else:
             raise ValueError(
-                "Model :: Ticker information has not yet been retrieved ! Run the backtest first..."
+                "Model :: get_ticker_long_names: Ticker information has not yet been retrieved ! Run the backtest first..."
+            )
+
+    @property
+    def get_portfolio_risk_metrics_df(self):
+        if self.portfolio_risk_metrics_df is not None:
+            return self.portfolio_risk_metrics_df
+        else:
+            raise ValueError(
+                "Model :: get_portfolio_risk_metrics_df: Ticker information has not yet been retrieved ! Run the backtest first.."
             )

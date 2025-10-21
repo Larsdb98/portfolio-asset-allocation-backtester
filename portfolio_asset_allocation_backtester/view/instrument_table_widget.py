@@ -1,5 +1,6 @@
 import panel as pn
 import pandas as pd
+from param.parameterized import Event
 
 
 class InstrumentTableWidget:
@@ -46,10 +47,10 @@ class InstrumentTableWidget:
     # ----------------
     # View Handlers
     # ----------------
-    def show_form(self, event):
+    def show_form(self, event: Event):
         self.form.visible = True
 
-    def hide_form(self, event=None):
+    def hide_form(self, event: Event):
         self.form.visible = False
         self.ticker_input.value = ""
 

@@ -4,6 +4,7 @@ import panel as pn
 import pandas as pd
 import numpy as np
 from pathlib import Path
+import plotly.graph_objects as go
 
 
 class HighlightsView:
@@ -18,6 +19,12 @@ class HighlightsView:
 
         pn.extension(
             "plotly", "mathjax", raw_css=[self.css], sizing_mode="stretch_width"
+        )
+
+        self.valuation_plot = pn.pane.Plotly(
+            self._empty_portfolio_valuation_plot(),
+            sizing_mode="stretch_width",
+            height=400,
         )
 
         self.return_card = pn.Column(
@@ -56,6 +63,12 @@ class HighlightsView:
             align="center",
         )
 
+        self.interpretation_text = pn.pane.Markdown(
+            "Run backtest first",
+            align="center",
+            margin=(10, 0, 0, 0),
+        )
+
         self.highlights_section = pn.Column(
             pn.pane.Markdown("## Highlights", styles={"color": "blue"}, align="center"),
             pn.Row(
@@ -76,18 +89,48 @@ class HighlightsView:
                 margin=(0, 0, 10, 0),
             ),
             pn.layout.Divider(),
-            pn.pane.Markdown(
-                "",
-                align="center",
-                margin=(10, 0, 0, 0),
-            ),
+            self.interpretation_text,
+            self.valuation_plot,
             sizing_mode="stretch_width",
             align="center",
             css_classes=["highlight-section"],
             margin=(10, 15, 25, 15),
         )
 
-    def update_portfolio_highlights(self, initial_investment: int | float):
+    def _empty_portfolio_valuation_plot(self) -> go.Figure:
+        """
+        Returns a placeholder Plotly figure for the portfolio valuation chart
+        (displayed before any backtest is run).
+        """
+        fig = go.Figure()
+
+        fig.add_annotation(
+            text="Portfolio valuation over time will appear here after running the backtest.",
+            xref="paper",
+            yref="paper",
+            x=0.5,
+            y=0.5,
+            showarrow=False,
+            font=dict(size=16, color="gray"),
+            align="center",
+        )
+
+        fig.update_layout(
+            title=dict(
+                text="Portfolio Valuation Over Time",
+                x=0.5,
+                font=dict(size=18, color="gray"),
+            ),
+            xaxis_title="Date",
+            yaxis_title="Portfolio Value (USD)",
+            template="plotly_white",
+            height=400,
+            margin=dict(l=40, r=20, t=60, b=40),
+        )
+
+        return fig
+
+    def update_portfolio_highlights(self, initial_investment: int):
         try:
             annual_return = self.model.portfolio_stats.get("annualized_return", np.nan)
             volatility = self.model.portfolio_stats.get("annualized_volatility", np.nan)
@@ -133,7 +176,7 @@ class HighlightsView:
 
             **Return**
 
-            During this backtested period, the portfolio achieved an **annualized return of {annual_return * 100:.2f}%**, with a **Sharpe ratio of {sharpe:.2f}**, suggesting {'strong' if sharpe > 1 else 'balanced' if sharpe > 0.5 else 'modest'} risk-adjusted performance. The portfolio displayed steady returns relative to its risk exposure.
+            During this backtested period, the portfolio achieved an **annualized return of {annual_return * 100:.2f}%**, with a **Sharpe ratio of {sharpe:.2f}**, suggesting {'strong' if sharpe > 1 else 'balanced' if sharpe > 0.5 else 'modest'} risk-adjusted performance.
 
             **Risk**
 
@@ -141,10 +184,71 @@ class HighlightsView:
             """
 
             # Update the text in the Highlights section
-            self.highlights_section[-1].object = interpretation_text
+            self.interpretation_text.object = interpretation_text
+
+            # Generate portolio valuation plot
+            valuation_fig = self.portfolio_valuation_plotly(
+                self.model.portfolio_stats["portfolio_value"],
+                start_date_str=self.model.portfolio_stats["start_date"],
+                end_date_str=self.model.portfolio_stats["end_date"],
+                initial_investment=initial_investment,
+            )
+
+            self.valuation_plot.object = valuation_fig
 
         except Exception as e:
             import traceback
 
             traceback.print_exc()
             print(f"View :: update_portfolio_highlights failed — {e}")
+
+    def portfolio_valuation_plotly(
+        self,
+        portfolio_value_series: pd.Series,
+        start_date_str: str,
+        end_date_str: str,
+        initial_investment: int = 100_000,
+    ) -> go.Figure:
+
+        portfolio_valuation = portfolio_value_series.astype(float) * initial_investment
+
+        fig = go.Figure()
+
+        fig.add_trace(
+            go.Scatter(
+                x=portfolio_valuation.index,
+                y=portfolio_valuation.values,
+                mode="lines",
+                name="Portfolio Value",
+                line=dict(color="#2E86AB", width=2),
+                hovertemplate="Date: %{x|%Y-%m-%d}<br>Value: $%{y:,.2f}<extra></extra>",
+            )
+        )
+
+        fig.add_trace(
+            go.Scatter(
+                x=[portfolio_valuation.index[0], portfolio_valuation.index[-1]],
+                y=[portfolio_valuation.iloc[0], portfolio_valuation.iloc[-1]],
+                mode="markers+text",
+                text=["Start", "End"],
+                textposition="top center",
+                marker=dict(color="#1B9E77", size=10, symbol="circle"),
+                showlegend=False,
+            )
+        )
+
+        fig.update_layout(
+            title=dict(
+                text=f"Portfolio Valuation Over Time<br><sup>{start_date_str} → {end_date_str}</sup>",
+                x=0.5,
+                font=dict(size=18),
+            ),
+            xaxis_title="Date",
+            yaxis_title="Portfolio Value (USD)",
+            template="plotly_white",
+            height=400,
+            margin=dict(l=40, r=20, t=60, b=40),
+            hovermode="x unified",
+        )
+
+        return fig

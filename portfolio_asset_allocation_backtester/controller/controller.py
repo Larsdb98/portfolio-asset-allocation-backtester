@@ -87,12 +87,13 @@ class Controller:
         interval = self.view.granularity_input.value
 
         # Optional immediate feedback
-        self.view.performance_plot.object = self.view.loading_figure()
+        self.view.detailed_analytics_view.performance_plot.object = (
+            self.view.detailed_analytics_view.loading_figure()
+        )
 
         def worker():
             """Runs heavy tasks in a separate thread."""
             try:
-                print("DEBUG: Starting background backtest computation")
                 self.model.run_backtest(
                     start_date=start_date, end_date=end_date, interval=interval
                 )
@@ -102,7 +103,7 @@ class Controller:
 
                 figure_dict = self.model.markowitz_plot_data
 
-                plotly_fig = self.view.stochastic_optimised_frontier_plotly(
+                plotly_fig = self.view.detailed_analytics_view.stochastic_optimised_frontier_plotly(
                     all_expected_volatility=figure_dict["all_expected_volatility"],
                     all_expected_log_returns=figure_dict["all_expected_log_returns"],
                     all_sharpe=figure_dict["all_sharpe"],
@@ -115,25 +116,29 @@ class Controller:
                 if pn.state.curdoc:
                     pn.state.curdoc.add_next_tick_callback(
                         lambda: setattr(
-                            self.view.performance_plot, "object", plotly_fig
+                            self.view.detailed_analytics_view.performance_plot,
+                            "object",
+                            plotly_fig,
                         )
                     )
                 else:
                     # Fallback: directly update the UI
-                    self.view.performance_plot.object = plotly_fig
+                    self.view.detailed_analytics_view.performance_plot.object = (
+                        plotly_fig
+                    )
 
             except Exception as e:
                 if pn.state.curdoc:
                     pn.state.curdoc.add_next_tick_callback(
                         lambda: setattr(
-                            self.view.performance_plot,
+                            self.view.detailed_analytics_view.performance_plot,
                             "object",
                             self.view.loading_figure(text=f"Exception: {e}"),
                         )
                     )
                 else:
-                    self.view.performance_plot.object = self.view.loading_figure(
-                        text=f"Exception: {e}"
+                    self.view.detailed_analytics_view.performance_plot.object = (
+                        self.view.loading_figure(text=f"Exception: {e}")
                     )
 
         # Launch thread
@@ -190,6 +195,12 @@ class Controller:
             # Update highlights section
             self.view.highlights_view.update_portfolio_highlights(
                 initial_investment=self.model.get_initial_portfolio_value
+            )
+
+            # Update statistics table under other tab
+            metrics_df = self.model.get_portfolio_risk_metrics_df
+            self.view.detailed_analytics_view.update_metrics_table(
+                metrics_df=metrics_df
             )
 
         except Exception as e:
