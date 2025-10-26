@@ -39,6 +39,31 @@ class Controller:
         self.view.initial_amount.param.watch(self.update_initial_amount, "value")
         self.view.weight_type_toggle.param.watch(self.on_weight_toggle, "value")
 
+        self.view.highlights_view.benchmark_selector.param.watch(
+            self.on_benchmark_toggle, "value"
+        )
+
+    def on_benchmark_toggle(self, event: Event):
+        """Update valuation plot when benchmark selection changes."""
+        try:
+            portfolio_series = self.model.portfolio_stats["portfolio_value"]
+            benchmark_df = self.model.portfolio_stats["benchmark_value"]
+            start = self.model.portfolio_stats["start_date"]
+            end = self.model.portfolio_stats["end_date"]
+
+            fig = self.view.highlights_view.portfolio_valuation_plotly(
+                portfolio_series,
+                benchmark_df,
+                selected_benchmarks=event.new,
+                start_date_str=start,
+                end_date_str=end,
+            )
+
+            self.view.highlights_view.valuation_plot.object = fig
+
+        except Exception as e:
+            print(f"Controller :: Benchmark toggle update failed — {e}")
+
     def add_default_instrument(self, ticker: str) -> None:
         self.model.add_instrument(ticker=ticker)
         self.view.instrument_table_widget.refresh_table(
@@ -133,12 +158,16 @@ class Controller:
                         lambda: setattr(
                             self.view.detailed_analytics_view.performance_plot,
                             "object",
-                            self.view.loading_figure(text=f"Exception: {e}"),
+                            self.view.detailed_analytics_view.loading_figure(
+                                text=f"Exception: {e}"
+                            ),
                         )
                     )
                 else:
                     self.view.detailed_analytics_view.performance_plot.object = (
-                        self.view.loading_figure(text=f"Exception: {e}")
+                        self.view.detailed_analytics_view.loading_figure(
+                            text=f"Exception: {e}"
+                        )
                     )
 
         # Launch thread

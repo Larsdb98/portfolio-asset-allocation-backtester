@@ -16,7 +16,12 @@ class Model:
         self.instrument_list = None
         self.instrument_df = pd.DataFrame(columns=["Ticker"])
         self.prices_df = pd.DataFrame()
+
+        self.benchmark_prices_df = pd.DataFrame()
+
         self.closing_prices_df = pd.DataFrame()
+        self.benchmark_closing_prices_df = pd.DataFrame()
+        self.benchmark_tickers: List[str] = ["^GSPC", "^RUT", "^IXIC"]
 
         self.markow_frontier = None
         self.markowitz_plot_data = None
@@ -78,6 +83,18 @@ class Model:
             self.__yfinance_ticker_info = yfinance_ticker_info(ticker_list)
             self.prices_df = yf_fetcher.get_raw_ohlc_data()
             self.closing_prices_df = yf_fetcher.get_price_data(price_type="Close")
+
+            # Benchmark prices of SP500, Russel, Nasdaq
+            yf_benchmark_fetcher = YFinanceFetcher(
+                start=start_date_str,
+                end=end_date_str,
+                tickers=self.benchmark_tickers,
+                interval=interval,
+            )
+            self.benchmark_prices_df = yf_benchmark_fetcher.get_raw_ohlc_data()
+            self.benchmark_closing_prices_df = yf_benchmark_fetcher.get_price_data(
+                price_type="Close"
+            )
         except Exception as e:
             raise Exception(
                 f"Model :: run_backtest :: YFinanceFetcher: ran into the following error: {e}"
@@ -111,9 +128,11 @@ class Model:
         weights = np.array(self.get_optimal_weights)
 
         daily_returns = self.closing_prices_df.pct_change().dropna()
+        daily_benchmark_returns = self.benchmark_closing_prices_df.pct_change().dropna()
 
         portfolio_returns = (daily_returns * weights).sum(axis=1)
 
+        benchmark_portfolio_value = (1 + daily_benchmark_returns).cumprod()
         portfolio_value = (1 + portfolio_returns).cumprod()
 
         trading_days = 252
@@ -135,6 +154,7 @@ class Model:
         self.portfolio_stats = {
             "daily_returns": portfolio_returns,
             "portfolio_value": portfolio_value,
+            "benchmark_value": benchmark_portfolio_value,
             "annualized_return": annualized_return,
             "annualized_volatility": annualized_volatility,
             "max_drawdown": max_drawdown,

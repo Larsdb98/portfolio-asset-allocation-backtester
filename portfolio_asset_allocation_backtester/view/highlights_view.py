@@ -21,6 +21,20 @@ class HighlightsView:
             "plotly", "mathjax", raw_css=[self.css], sizing_mode="stretch_width"
         )
 
+        self.benchmark_selector = pn.widgets.CheckBoxGroup(
+            name="Benchmarks",
+            value=["S&P 500"],
+            options=["S&P 500", "Russell 2000", "NASDAQ"],
+            inline=True,
+            align="center",
+            styles={
+                "display": "flex",
+                "justify-content": "center",
+                "gap": "15px",
+                "margin": "0 auto",
+            },
+        )
+
         self.valuation_plot = pn.pane.Plotly(
             self._empty_portfolio_valuation_plot(),
             sizing_mode="stretch_width",
@@ -90,6 +104,7 @@ class HighlightsView:
             ),
             pn.layout.Divider(),
             self.interpretation_text,
+            self.benchmark_selector,
             self.valuation_plot,
             sizing_mode="stretch_width",
             align="center",
@@ -188,7 +203,9 @@ class HighlightsView:
 
             # Generate portolio valuation plot
             valuation_fig = self.portfolio_valuation_plotly(
-                self.model.portfolio_stats["portfolio_value"],
+                portfolio_value_series=self.model.portfolio_stats["portfolio_value"],
+                benchmark_df=self.model.portfolio_stats["benchmark_value"],
+                selected_benchmarks=self.benchmark_selector.value,
                 start_date_str=self.model.portfolio_stats["start_date"],
                 end_date_str=self.model.portfolio_stats["end_date"],
                 initial_investment=initial_investment,
@@ -205,13 +222,15 @@ class HighlightsView:
     def portfolio_valuation_plotly(
         self,
         portfolio_value_series: pd.Series,
+        benchmark_df: pd.DataFrame,
+        selected_benchmarks: list,
         start_date_str: str,
         end_date_str: str,
         initial_investment: int = 100_000,
     ) -> go.Figure:
+        """Generate portfolio valuation plot with optional benchmark overlays."""
 
         portfolio_valuation = portfolio_value_series.astype(float) * initial_investment
-
         fig = go.Figure()
 
         fig.add_trace(
@@ -224,6 +243,28 @@ class HighlightsView:
                 hovertemplate="Date: %{x|%Y-%m-%d}<br>Value: $%{y:,.2f}<extra></extra>",
             )
         )
+
+        benchmark_map = {"S&P 500": "^GSPC", "Russell 2000": "^RUT", "NASDAQ": "^IXIC"}
+        benchmark_colors = {
+            "S&P 500": "#E74C3C",
+            "Russell 2000": "#9B59B6",
+            "NASDAQ": "#27AE60",
+        }
+
+        for name in selected_benchmarks:
+            ticker = benchmark_map[name]
+            if ticker in benchmark_df.columns:
+                benchmark_val = benchmark_df[ticker].astype(float) * initial_investment
+                fig.add_trace(
+                    go.Scatter(
+                        x=benchmark_val.index,
+                        y=benchmark_val.values,
+                        mode="lines",
+                        name=name,
+                        line=dict(color=benchmark_colors[name], width=1.5, dash="dot"),
+                        hovertemplate="Date: %{x|%Y-%m-%d}<br>Value: $%{y:,.2f}<extra></extra>",
+                    )
+                )
 
         fig.add_trace(
             go.Scatter(
@@ -241,14 +282,26 @@ class HighlightsView:
             title=dict(
                 text=f"Portfolio Valuation Over Time<br><sup>{start_date_str} → {end_date_str}</sup>",
                 x=0.5,
+                y=0.94,
                 font=dict(size=18),
             ),
             xaxis_title="Date",
             yaxis_title="Portfolio Value (USD)",
             template="plotly_white",
-            height=400,
-            margin=dict(l=40, r=20, t=60, b=40),
+            height=440,
+            margin=dict(l=40, r=20, t=100, b=40),
             hovermode="x unified",
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="center",
+                x=0.5,
+                bgcolor="rgba(255,255,255,0.85)",
+                bordercolor="LightGray",
+                borderwidth=1,
+                font=dict(size=12),
+            ),
         )
 
         return fig
